@@ -1,0 +1,20 @@
+# Downloaded FASTQ files
+fastq/
+
+# Generated samplesheet
+samplesheet.csv
+samplesheet.csv.lock
+
+# SLURM logs
+logs/
+*.log
+*.err
+*.out
+
+# Temporary files
+*.tmp
+*.temp
+
+# Accession files (optional - uncomment if you don't want to track these)
+# accessions.txt
+# *.txt
