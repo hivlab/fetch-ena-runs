@@ -60,16 +60,32 @@ echo "Output directory: $ACCESSIONS_DIR"
 echo "Logs directory: $LOGS_DIR"
 echo ""
 
-# Get the directory where this script is located
+# Get the directory where this script is located (absolute path)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Get absolute paths to the scripts
+SUBMIT_SCRIPT="${SCRIPT_DIR}/submit_ena_download.sh"
+DOWNLOAD_SCRIPT="${SCRIPT_DIR}/ena-file-download-read_run-search-fastq_ftp.sh"
+
+# Verify scripts exist
+if [ ! -f "$SUBMIT_SCRIPT" ]; then
+    echo "Error: Cannot find submit_ena_download.sh at: $SUBMIT_SCRIPT"
+    exit 1
+fi
+
+if [ ! -f "$DOWNLOAD_SCRIPT" ]; then
+    echo "Error: Cannot find ena-file-download-read_run-search-fastq_ftp.sh at: $DOWNLOAD_SCRIPT"
+    exit 1
+fi
 
 # Submit the array job
 # Each task will process a chunk of accessions
 echo "Submitting SLURM array job..."
 sbatch --array=1-${ARRAY_SIZE} \
+  --export=DOWNLOAD_SCRIPT="$DOWNLOAD_SCRIPT" \
   --output="${LOGS_DIR}/ena_download_%A_%a.log" \
   --error="${LOGS_DIR}/ena_download_%A_%a.err" \
-  "${SCRIPT_DIR}/submit_ena_download.sh" "$ACCESSIONS_FILE_ABS"
+  "$SUBMIT_SCRIPT" "$ACCESSIONS_FILE_ABS"
 
 echo ""
 echo "Job submitted! Monitor progress with:"

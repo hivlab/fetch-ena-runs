@@ -23,14 +23,18 @@ if [ ! -f "$ACCESSIONS_FILE" ]; then
     exit 1
 fi
 
-# Get absolute path to the directory containing the accessions file
-ACCESSIONS_DIR=$(dirname "$(realpath "$ACCESSIONS_FILE")")
-ACCESSIONS_BASENAME=$(basename "$ACCESSIONS_FILE")
+# Get absolute path to the accessions file
+ACCESSIONS_FILE_ABS=$(realpath "$ACCESSIONS_FILE")
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The download script path should be passed via environment variable
+# Set by submit_parallel.sh as DOWNLOAD_SCRIPT
+if [ -z "$DOWNLOAD_SCRIPT" ]; then
+    echo "Error: DOWNLOAD_SCRIPT environment variable not set"
+    echo "This script should be called via submit_parallel.sh"
+    exit 1
+fi
 
-# Run the download script with absolute path to accessions file
-"${SCRIPT_DIR}/ena-file-download-read_run-search-fastq_ftp.sh" "${ACCESSIONS_DIR}/${ACCESSIONS_BASENAME}"
+# Run the download script with absolute path
+"$DOWNLOAD_SCRIPT" "$ACCESSIONS_FILE_ABS"
 
 echo "Task $SLURM_ARRAY_TASK_ID completed"
