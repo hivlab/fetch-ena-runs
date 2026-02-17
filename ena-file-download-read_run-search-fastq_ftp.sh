@@ -18,15 +18,34 @@ mkdir -p "$FASTQ_DIR"
 # Initialize samplesheet in the same directory as accessions file
 SAMPLESHEET="${ACCESSIONS_DIR}/samplesheet.csv"
 
-# If running as SLURM array job, only process one line
+# Initialize samplesheet
 if [ -n "$SLURM_ARRAY_TASK_ID" ]; then
-  # In array mode, create header only from task 1 (or if file doesn't exist)
+  # In SLURM array mode, create header only from task 1 (or if file doesn't exist)
   if [ "$SLURM_ARRAY_TASK_ID" -eq 1 ] || [ ! -f "$SAMPLESHEET" ]; then
     echo "sample,fastq_1,fastq_2" > "$SAMPLESHEET"
   fi
+
+  # Calculate which accessions this task should process
+  TOTAL_ACCESSIONS=$(wc -l < "$ACCESSIONS_FILE")
+  ARRAY_SIZE=${SLURM_ARRAY_TASK_COUNT:-1}
+
+  # Calculate chunk size (round up)
+  CHUNK_SIZE=$(( (TOTAL_ACCESSIONS + ARRAY_SIZE - 1) / ARRAY_SIZE ))
+
+  # Calculate start and end lines for this task
+  START_LINE=$(( (SLURM_ARRAY_TASK_ID - 1) * CHUNK_SIZE + 1 ))
+  END_LINE=$(( SLURM_ARRAY_TASK_ID * CHUNK_SIZE ))
+
+  # Don't go beyond the file
+  [ $END_LINE -gt $TOTAL_ACCESSIONS ] && END_LINE=$TOTAL_ACCESSIONS
+
+  echo "SLURM Array Task $SLURM_ARRAY_TASK_ID/$ARRAY_SIZE"
+  echo "Processing accessions $START_LINE to $END_LINE (of $TOTAL_ACCESSIONS total)"
 else
   # Not in array mode, create new samplesheet
   echo "sample,fastq_1,fastq_2" > "$SAMPLESHEET"
+  START_LINE=1
+  END_LINE=$(wc -l < "$ACCESSIONS_FILE")
 fi
 
 # Function to verify MD5 checksum
@@ -48,25 +67,19 @@ verify_md5() {
     fi
 }
 
-# If SLURM array job, process only the specific line
-if [ -n "$SLURM_ARRAY_TASK_ID" ]; then
-  line=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$1")
-  if [ -z "$line" ]; then
-    echo "No accession found for task ID $SLURM_ARRAY_TASK_ID"
-    exit 0
-  fi
-  echo "Processing accession $SLURM_ARRAY_TASK_ID: $line"
-fi
-
+# Process accessions in the assigned range
+line_num=0
 while IFS= read -r line
 do
+  line_num=$((line_num + 1))
   [ -z "$line" ] && continue
 
-  # Skip to correct line if SLURM array job
-  if [ -n "$SLURM_ARRAY_TASK_ID" ]; then
-    current_line=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$1")
-    [ "$line" != "$current_line" ] && continue
-  fi
+  # Skip lines outside our assigned range
+  [ $line_num -lt $START_LINE ] && continue
+  [ $line_num -gt $END_LINE ] && break
+
+  echo ""
+  echo "=== Processing accession $line_num/$TOTAL_ACCESSIONS: $line ==="
 
   # Query ENA API and get URLs and MD5 sums
   response=$(curl -s -X POST -H "Content-Type: application/x-www-form-urlencoded" \
@@ -134,12 +147,7 @@ do
     fi
   ) 200>"${SAMPLESHEET}.lock"
 
-  # If SLURM array job, we're done after processing one sample
-  [ -n "$SLURM_ARRAY_TASK_ID" ] && break
-
 done < "$1"
 
-if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
-  echo ""
-  echo "✓ Download complete! Samplesheet saved to: $SAMPLESHEET"
-fi
+echo ""
+echo "✓ Download complete! Samplesheet saved to: $SAMPLESHEET"

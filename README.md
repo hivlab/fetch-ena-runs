@@ -28,7 +28,8 @@ A bash script to download FASTQ files from the European Nucleotide Archive (ENA)
 
 **Parallel mode (SLURM):**
 ```bash
-./submit_parallel.sh accessions.txt
+./submit_parallel.sh accessions.txt          # 10 parallel jobs (default)
+./submit_parallel.sh accessions.txt 20       # 20 parallel jobs
 ```
 
 ## Usage
@@ -41,27 +42,35 @@ A bash script to download FASTQ files from the European Nucleotide Archive (ENA)
 
 ### Parallel Execution on SLURM
 
-For faster downloads on HPC clusters, use the SLURM submission script to process all accessions in parallel:
+For faster downloads on HPC clusters, use the SLURM submission script to process accessions in parallel:
 
 ```bash
-./submit_parallel.sh <accessions_file>
+./submit_parallel.sh <accessions_file> [array_size]
 ```
 
 This will automatically:
 - Count the number of accessions
-- Submit a SLURM array job where each task processes one accession
+- Split accessions into N chunks (default: 10)
+- Submit a SLURM array job where each task processes multiple accessions
 - Download all samples in parallel across compute nodes
+
+**Examples:**
+```bash
+./submit_parallel.sh accessions.txt     # Split into 10 parallel jobs (default)
+./submit_parallel.sh accessions.txt 5   # Split into 5 parallel jobs
+./submit_parallel.sh accessions.txt 20  # Split into 20 parallel jobs
+```
 
 **Manual SLURM submission:**
 ```bash
-# Count accessions
-NUM=$(grep -c -v '^[[:space:]]*$' accessions.txt)
+# Submit with 10 parallel jobs (default)
+sbatch --array=1-10 submit_ena_download.sh accessions.txt
 
-# Submit array job (limit to 10 concurrent downloads due to ENA rate limits)
-sbatch --array=1-${NUM}%10 submit_ena_download.sh accessions.txt
+# Submit with 20 parallel jobs
+sbatch --array=1-20 submit_ena_download.sh accessions.txt
 ```
 
-**Note:** The `%10` limits concurrent downloads to 10 at a time to respect ENA's rate limits. Adjust if needed.
+**Note:** Each array task processes multiple accessions. The script automatically divides the work evenly.
 
 ### Input Format
 
@@ -107,10 +116,14 @@ EOF
 # From anywhere - automatically submits parallel array job
 /path/to/submit_parallel.sh /path/to/my_project/accessions.txt
 
+# With custom parallelism (e.g., 20 jobs)
+/path/to/submit_parallel.sh /path/to/my_project/accessions.txt 20
+
 # This will:
 # - Create logs/ directory in my_project/
-# - Submit SLURM array job with 10 concurrent tasks
-# - Download all accessions in parallel
+# - Split accessions into N chunks (default 10)
+# - Submit SLURM array job with N parallel tasks
+# - Each task processes its chunk of accessions
 ```
 
 All outputs will be created in `my_project/` regardless of where you run the script from.
@@ -170,21 +183,30 @@ The SLURM submission script (`submit_ena_download.sh`) has default resource allo
 #SBATCH --mem=2G             # 2GB memory per task
 ```
 
-### Rate Limiting
+### Parallelism Configuration
 
-**Default:** Maximum 10 concurrent downloads to respect ENA rate limits.
+**Default:** 10 parallel jobs, each processing multiple accessions.
 
-To adjust the concurrency limit, edit `submit_parallel.sh` or submit manually:
+**How it works:**
+- 100 accessions with 10 jobs = ~10 accessions per job
+- 100 accessions with 20 jobs = ~5 accessions per job
+
+To adjust parallelism:
 
 ```bash
-# Allow 20 concurrent downloads (adjust with caution)
-sbatch --array=1-100%20 submit_ena_download.sh accessions.txt
+# More parallel jobs (faster, but more load on ENA)
+./submit_parallel.sh accessions.txt 20
 
-# Allow 5 concurrent downloads (more conservative)
-sbatch --array=1-100%5 submit_ena_download.sh accessions.txt
+# Fewer parallel jobs (more conservative)
+./submit_parallel.sh accessions.txt 5
 ```
 
-**To customize other resources**, override at submission:
+**ENA Rate Limit Considerations:**
+- ENA API limit: 50 requests/second
+- With 10-20 parallel jobs, you're well within safe limits
+- Each job downloads sequentially within its chunk
+
+**To customize resources**, override at submission:
 
 ```bash
 sbatch --array=1-10%10 --time=02:00:00 --mem=4G submit_ena_download.sh accessions.txt
@@ -219,15 +241,19 @@ Once all array tasks finish, all outputs will be in the same directory as your a
 
 | Method | Speed | Use Case |
 |--------|-------|----------|
-| **Sequential** (`./ena-file-download-read_run-search-fastq_ftp.sh`) | Downloads one file at a time | Small datasets, local testing |
-| **SLURM Parallel** (`./submit_parallel.sh`) | All accessions download simultaneously | Large datasets, HPC clusters |
+| **Sequential** (`./ena-file-download-read_run-search-fastq_ftp.sh`) | One accession at a time | Small datasets, local testing |
+| **SLURM Parallel** (`./submit_parallel.sh`) | Multiple accessions in parallel | Large datasets, HPC clusters |
 
 **Example speedup:**
-- 50 samples, 2 files each, 10 minutes per file
-- Sequential: ~1000 minutes (16+ hours)
-- Parallel (10 concurrent): ~100 minutes (1.7 hours)
+- 100 accessions, 2 files each, 10 minutes per file
+- Sequential: ~2000 minutes (33+ hours)
+- Parallel (10 jobs): ~200 minutes (3.3 hours)
+- Parallel (20 jobs): ~100 minutes (1.7 hours)
 
-*Note: Parallel execution limited to 10 concurrent downloads to respect ENA rate limits.*
+**How parallelism works:**
+- Accessions are split into N chunks (you choose N)
+- Each SLURM job processes one chunk sequentially
+- All N jobs run in parallel
 
 ## How It Works
 
