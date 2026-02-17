@@ -104,27 +104,40 @@ do
     # Check if file exists and verify MD5
     if verify_md5 "$filepath" "$expected_md5"; then
       echo "✓ $filename already exists with correct MD5 sum, skipping"
+      sample_files+=("$filepath")
     else
       if [ -f "$filepath" ]; then
-        echo "✗ $filename exists but MD5 mismatch, redownloading..."
+        echo "✗ $filename exists but MD5 mismatch, removing and redownloading..."
         rm -f "$filepath"
       else
         echo "⬇ Downloading $filename..."
       fi
 
-      # Download the file to fastq directory with progress bar
-      wget --progress=bar:force --show-progress -P "$FASTQ_DIR" "$url"
+      # Try downloading up to 3 times
+      download_success=false
+      for attempt in {1..3}; do
+        [ $attempt -gt 1 ] && echo "⟳ Retry attempt $attempt/3..."
 
-      # Verify the downloaded file
-      if verify_md5 "$filepath" "$expected_md5"; then
-        echo "✓ $filename downloaded and verified successfully"
-      else
-        echo "✗ ERROR: $filename MD5 verification failed after download!"
+        # Download the file to fastq directory with progress bar
+        wget --progress=bar:force --show-progress -P "$FASTQ_DIR" "$url"
+
+        # Verify the downloaded file
+        if verify_md5 "$filepath" "$expected_md5"; then
+          echo "✓ $filename downloaded and verified successfully"
+          download_success=true
+          sample_files+=("$filepath")
+          break
+        else
+          echo "✗ $filename MD5 verification failed (attempt $attempt/3)"
+          rm -f "$filepath"
+        fi
+      done
+
+      if [ "$download_success" = false ]; then
+        echo "✗✗ ERROR: $filename failed MD5 verification after 3 attempts! Skipping this file."
+        echo "   Expected MD5: $expected_md5"
       fi
     fi
-
-    # Add to sample files list
-    sample_files+=("$filepath")
   done < <(echo "$urls") 3< <(echo "$md5s")
 
   # Add entry to samplesheet (with file locking in SLURM array mode)
@@ -134,7 +147,9 @@ do
       flock -x 200
     fi
 
-    if [ ${#sample_files[@]} -eq 1 ]; then
+    if [ ${#sample_files[@]} -eq 0 ]; then
+      echo "⚠ Warning: No valid files downloaded for $line, skipping samplesheet entry"
+    elif [ ${#sample_files[@]} -eq 1 ]; then
       # Single-end: fastq_1 only
       echo "$line,${sample_files[0]}," >> "$SAMPLESHEET"
     elif [ ${#sample_files[@]} -eq 2 ]; then
