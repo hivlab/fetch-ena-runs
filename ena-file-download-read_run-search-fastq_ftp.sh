@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Create fastq directory if it doesn't exist
+FASTQ_DIR="fastq"
+mkdir -p "$FASTQ_DIR"
+
+# Initialize samplesheet
+SAMPLESHEET="samplesheet.csv"
+echo "sample,fastq_1,fastq_2" > "$SAMPLESHEET"
+
 # Function to verify MD5 checksum
 verify_md5() {
     local file="$1"
@@ -34,6 +42,9 @@ do
   readarray -t url_array <<< "$urls"
   readarray -t md5_array <<< "$md5s"
 
+  # Track files for this sample
+  sample_files=()
+
   # Process each file
   for i in "${!url_array[@]}"; do
     url="${url_array[$i]}"
@@ -43,27 +54,48 @@ do
     [ -z "$url" ] && continue
 
     filename=$(basename "$url")
+    filepath="$FASTQ_DIR/$filename"
 
     # Check if file exists and verify MD5
-    if verify_md5 "$filename" "$expected_md5"; then
+    if verify_md5 "$filepath" "$expected_md5"; then
       echo "✓ $filename already exists with correct MD5 sum, skipping"
     else
-      if [ -f "$filename" ]; then
+      if [ -f "$filepath" ]; then
         echo "✗ $filename exists but MD5 mismatch, redownloading..."
-        rm -f "$filename"
+        rm -f "$filepath"
       else
         echo "⬇ Downloading $filename..."
       fi
 
-      # Download the file
-      wget -q "$url"
+      # Download the file to fastq directory
+      wget -q -P "$FASTQ_DIR" "$url"
 
       # Verify the downloaded file
-      if verify_md5 "$filename" "$expected_md5"; then
+      if verify_md5 "$filepath" "$expected_md5"; then
         echo "✓ $filename downloaded and verified successfully"
       else
         echo "✗ ERROR: $filename MD5 verification failed after download!"
       fi
     fi
+
+    # Add to sample files list
+    sample_files+=("$filepath")
   done
+
+  # Add entry to samplesheet
+  if [ ${#sample_files[@]} -eq 1 ]; then
+    # Single-end: fastq_1 only
+    echo "$line,${sample_files[0]}," >> "$SAMPLESHEET"
+  elif [ ${#sample_files[@]} -eq 2 ]; then
+    # Paired-end: fastq_1 and fastq_2
+    echo "$line,${sample_files[0]},${sample_files[1]}" >> "$SAMPLESHEET"
+  elif [ ${#sample_files[@]} -gt 2 ]; then
+    # More than 2 files (unusual, but handle it)
+    echo "$line,${sample_files[0]},${sample_files[1]}" >> "$SAMPLESHEET"
+    echo "⚠ Warning: $line has more than 2 FASTQ files, only first 2 added to samplesheet"
+  fi
+
 done < "$1"
+
+echo ""
+echo "✓ Download complete! Samplesheet saved to: $SAMPLESHEET"

@@ -21,7 +21,7 @@ A bash script to download FASTQ files from the European Nucleotide Archive (ENA)
 ## Usage
 
 ```bash
-./ena-file-download-read_run-search-fastq_ftp-20260212-1456.sh <accessions_file>
+./ena-file-download-read_run-search-fastq_ftp.sh <accessions_file>
 ```
 
 ### Input Format
@@ -51,12 +51,15 @@ EOF
 
 2. Run the script:
 ```bash
-./ena-file-download-read_run-search-fastq_ftp-20260212-1456.sh accessions.txt
+./ena-file-download-read_run-search-fastq_ftp.sh accessions.txt
 ```
 
 ## Output
 
-The script will download FASTQ files to the current directory with status messages:
+The script will:
+- Download FASTQ files to the `fastq/` directory
+- Generate a `samplesheet.csv` file with sample metadata
+- Display status messages:
 
 ```
 ✓ SRR12345678_1.fastq.gz already exists with correct MD5 sum, skipping
@@ -64,7 +67,31 @@ The script will download FASTQ files to the current directory with status messag
 ✓ SRR12345678_2.fastq.gz downloaded and verified successfully
 ⬇ Downloading SRR12345679_1.fastq.gz...
 ✓ SRR12345679_1.fastq.gz downloaded and verified successfully
+✓ Download complete! Samplesheet saved to: samplesheet.csv
 ```
+
+### Generated Files
+
+**Directory structure:**
+```
+.
+├── fastq/
+│   ├── SRR12345678_1.fastq.gz
+│   ├── SRR12345678_2.fastq.gz
+│   └── SRR12345679.fastq.gz
+└── samplesheet.csv
+```
+
+**samplesheet.csv format:**
+```csv
+sample,fastq_1,fastq_2
+SRR12345678,fastq/SRR12345678_1.fastq.gz,fastq/SRR12345678_2.fastq.gz
+SRR12345679,fastq/SRR12345679.fastq.gz,
+```
+
+- **Paired-end reads**: Both `fastq_1` and `fastq_2` columns populated
+- **Single-end reads**: Only `fastq_1` populated, `fastq_2` empty
+- Paths are relative to the working directory
 
 ## How It Works
 
@@ -80,8 +107,14 @@ The script will download FASTQ files to the current directory with status messag
 
 3. After each download, verifies MD5 checksum and reports status
 
+4. Generates a `samplesheet.csv` file with:
+   - Sample accession
+   - Path to first FASTQ file (or only file for single-end)
+   - Path to second FASTQ file (for paired-end) or empty
+
 ## Notes
 
-- Files are downloaded to the current working directory
+- Files are downloaded to the `fastq/` directory (created automatically)
 - For paired-end reads, both files (e.g., `_1.fastq.gz` and `_2.fastq.gz`) are processed
 - Failed MD5 verification after download indicates a potential network issue or corrupted transfer
+- The `samplesheet.csv` uses relative paths (`fastq/...`) and can be used directly with pipelines like nf-core
