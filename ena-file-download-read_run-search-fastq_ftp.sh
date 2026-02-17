@@ -38,18 +38,11 @@ do
   urls=$(echo "$response" | cut -f 2 | tr ';' '\n')
   md5s=$(echo "$response" | cut -f 3 | tr ';' '\n')
 
-  # Convert to arrays
-  readarray -t url_array <<< "$urls"
-  readarray -t md5_array <<< "$md5s"
-
   # Track files for this sample
   sample_files=()
 
-  # Process each file
-  for i in "${!url_array[@]}"; do
-    url="${url_array[$i]}"
-    expected_md5="${md5_array[$i]}"
-
+  # Process each file by reading URLs and MD5s in parallel
+  while IFS= read -r url && IFS= read -r expected_md5 <&3; do
     # Skip empty lines
     [ -z "$url" ] && continue
 
@@ -80,7 +73,7 @@ do
 
     # Add to sample files list
     sample_files+=("$filepath")
-  done
+  done < <(echo "$urls") 3< <(echo "$md5s")
 
   # Add entry to samplesheet
   if [ ${#sample_files[@]} -eq 1 ]; then
