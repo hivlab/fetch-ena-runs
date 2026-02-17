@@ -20,9 +20,35 @@ A bash script to download FASTQ files from the European Nucleotide Archive (ENA)
 
 ## Usage
 
+### Local/Sequential Execution
+
 ```bash
 ./ena-file-download-read_run-search-fastq_ftp.sh <accessions_file>
 ```
+
+### Parallel Execution on SLURM
+
+For faster downloads on HPC clusters, use the SLURM submission script to process all accessions in parallel:
+
+```bash
+./submit_parallel.sh <accessions_file>
+```
+
+This will automatically:
+- Count the number of accessions
+- Submit a SLURM array job where each task processes one accession
+- Download all samples in parallel across compute nodes
+
+**Manual SLURM submission:**
+```bash
+# Count accessions
+NUM=$(grep -c -v '^[[:space:]]*$' accessions.txt)
+
+# Submit array job (limit to 10 concurrent downloads due to ENA rate limits)
+sbatch --array=1-${NUM}%10 submit_ena_download.sh accessions.txt
+```
+
+**Note:** The `%10` limits concurrent downloads to 10 at a time to respect ENA's rate limits. Adjust if needed.
 
 ### Input Format
 
@@ -92,6 +118,73 @@ SRR12345679,fastq/SRR12345679.fastq.gz,
 - **Paired-end reads**: Both `fastq_1` and `fastq_2` columns populated
 - **Single-end reads**: Only `fastq_1` populated, `fastq_2` empty
 - Paths are relative to the working directory
+
+## SLURM Configuration
+
+The SLURM submission script (`submit_ena_download.sh`) has default resource allocations:
+
+```bash
+#SBATCH --time=04:00:00      # 4 hour time limit per download
+#SBATCH --cpus-per-task=1    # 1 CPU per task
+#SBATCH --mem=2G             # 2GB memory per task
+```
+
+### Rate Limiting
+
+**Default:** Maximum 10 concurrent downloads to respect ENA rate limits.
+
+To adjust the concurrency limit, edit `submit_parallel.sh` or submit manually:
+
+```bash
+# Allow 20 concurrent downloads (adjust with caution)
+sbatch --array=1-100%20 submit_ena_download.sh accessions.txt
+
+# Allow 5 concurrent downloads (more conservative)
+sbatch --array=1-100%5 submit_ena_download.sh accessions.txt
+```
+
+**To customize other resources**, override at submission:
+
+```bash
+sbatch --array=1-10%10 --time=02:00:00 --mem=4G submit_ena_download.sh accessions.txt
+```
+
+### Monitoring Jobs
+
+```bash
+# Check job status
+squeue -u $USER
+
+# View live logs
+tail -f logs/ena_download_*.log
+
+# Check for errors
+grep -i error logs/ena_download_*.err
+
+# Count completed downloads
+ls fastq/*.fastq.gz | wc -l
+```
+
+### After Jobs Complete
+
+Once all array tasks finish:
+- All FASTQ files will be in the `fastq/` directory
+- The `samplesheet.csv` will contain all samples (automatically merged)
+- Individual job logs will be in `logs/` directory
+
+## Parallel vs Sequential Execution
+
+| Method | Speed | Use Case |
+|--------|-------|----------|
+| **Sequential** (`./ena-file-download-read_run-search-fastq_ftp.sh`) | Downloads one file at a time | Small datasets, local testing |
+| **SLURM Parallel** (`./submit_parallel.sh`) | All accessions download simultaneously | Large datasets, HPC clusters |
+
+**Example speedup:**
+- 50 samples, 2 files each, 10 minutes per file
+- Sequential: ~1000 minutes (16+ hours)
+- Parallel (10 concurrent): ~100 minutes (1.7 hours)
+
+*Note: Parallel execution limited to 10 concurrent downloads to respect ENA rate limits.*
 
 ## How It Works
 
