@@ -17,6 +17,19 @@ A bash script to download FASTQ files from the European Nucleotide Archive (ENA)
 - `curl`
 - `wget`
 - `md5sum`
+- `flock` (for parallel SLURM execution)
+
+## Quick Start
+
+**Sequential mode (local):**
+```bash
+./ena-file-download-read_run-search-fastq_ftp.sh accessions.txt
+```
+
+**Parallel mode (SLURM):**
+```bash
+./submit_parallel.sh accessions.txt
+```
 
 ## Usage
 
@@ -78,13 +91,26 @@ SRR12345679
 EOF
 ```
 
-2. Run the script (can be run from anywhere):
+2. Run the script:
+
+**Option A: Sequential (local machine)**
 ```bash
 # From the project directory
 /path/to/ena-file-download-read_run-search-fastq_ftp.sh accessions.txt
 
 # Or from anywhere
 /path/to/ena-file-download-read_run-search-fastq_ftp.sh /path/to/my_project/accessions.txt
+```
+
+**Option B: Parallel (SLURM cluster)**
+```bash
+# From anywhere - automatically submits parallel array job
+/path/to/submit_parallel.sh /path/to/my_project/accessions.txt
+
+# This will:
+# - Create logs/ directory in my_project/
+# - Submit SLURM array job with 10 concurrent tasks
+# - Download all accessions in parallel
 ```
 
 All outputs will be created in `my_project/` regardless of where you run the script from.
