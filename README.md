@@ -67,18 +67,27 @@ The script accepts various accession formats:
 
 ## Example
 
-1. Create an accessions file:
+1. Create a project directory with an accessions file:
 ```bash
+mkdir my_project
+cd my_project
+
 cat > accessions.txt << EOF
 SRR12345678
 SRR12345679
 EOF
 ```
 
-2. Run the script:
+2. Run the script (can be run from anywhere):
 ```bash
-./ena-file-download-read_run-search-fastq_ftp.sh accessions.txt
+# From the project directory
+/path/to/ena-file-download-read_run-search-fastq_ftp.sh accessions.txt
+
+# Or from anywhere
+/path/to/ena-file-download-read_run-search-fastq_ftp.sh /path/to/my_project/accessions.txt
 ```
+
+All outputs will be created in `my_project/` regardless of where you run the script from.
 
 ## Output
 
@@ -98,14 +107,20 @@ The script will:
 
 ### Generated Files
 
+**All outputs are created in the same directory as the accessions file:**
+
 **Directory structure:**
 ```
-.
-├── fastq/
+/path/to/your/project/
+├── accessions.txt          # Your input file
+├── fastq/                  # Downloaded files
 │   ├── SRR12345678_1.fastq.gz
 │   ├── SRR12345678_2.fastq.gz
 │   └── SRR12345679.fastq.gz
-└── samplesheet.csv
+├── samplesheet.csv         # Generated samplesheet
+└── logs/                   # SLURM logs (if using parallel mode)
+    ├── ena_download_12345_1.log
+    └── ena_download_12345_1.err
 ```
 
 **samplesheet.csv format:**
@@ -117,7 +132,7 @@ SRR12345679,fastq/SRR12345679.fastq.gz,
 
 - **Paired-end reads**: Both `fastq_1` and `fastq_2` columns populated
 - **Single-end reads**: Only `fastq_1` populated, `fastq_2` empty
-- Paths are relative to the working directory
+- **Paths**: Relative paths (`fastq/...`) from the directory containing the accessions file
 
 ## SLURM Configuration
 
@@ -155,7 +170,7 @@ sbatch --array=1-10%10 --time=02:00:00 --mem=4G submit_ena_download.sh accession
 # Check job status
 squeue -u $USER
 
-# View live logs
+# View live logs (from your project directory where accessions.txt is)
 tail -f logs/ena_download_*.log
 
 # Check for errors
@@ -165,12 +180,14 @@ grep -i error logs/ena_download_*.err
 ls fastq/*.fastq.gz | wc -l
 ```
 
+**Note:** All outputs (fastq/, samplesheet.csv, logs/) are created in the same directory as your accessions file.
+
 ### After Jobs Complete
 
-Once all array tasks finish:
-- All FASTQ files will be in the `fastq/` directory
-- The `samplesheet.csv` will contain all samples (automatically merged)
-- Individual job logs will be in `logs/` directory
+Once all array tasks finish, all outputs will be in the same directory as your accessions file:
+- All FASTQ files in `fastq/` subdirectory
+- `samplesheet.csv` with all samples (automatically merged with file locking)
+- Individual job logs in `logs/` subdirectory
 
 ## Parallel vs Sequential Execution
 

@@ -19,6 +19,10 @@ if [ ! -f "$ACCESSIONS_FILE" ]; then
     exit 1
 fi
 
+# Get absolute path and directory of accessions file
+ACCESSIONS_FILE_ABS=$(realpath "$ACCESSIONS_FILE")
+ACCESSIONS_DIR=$(dirname "$ACCESSIONS_FILE_ABS")
+
 # Count number of accessions (non-empty lines)
 NUM_ACCESSIONS=$(grep -c -v '^[[:space:]]*$' "$ACCESSIONS_FILE")
 
@@ -27,17 +31,27 @@ if [ "$NUM_ACCESSIONS" -eq 0 ]; then
     exit 1
 fi
 
+# Create logs directory in the same location as accessions file
+LOGS_DIR="${ACCESSIONS_DIR}/logs"
+mkdir -p "$LOGS_DIR"
+
 echo "Found $NUM_ACCESSIONS accessions in $ACCESSIONS_FILE"
 echo "Submitting SLURM array job with array size 1-$NUM_ACCESSIONS"
 echo "Limiting to 10 parallel downloads at a time (ENA rate limit)"
+echo "Output directory: $ACCESSIONS_DIR"
+echo "Logs directory: $LOGS_DIR"
 echo ""
 
-# Create logs directory
-mkdir -p logs
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Submit the job with max 10 concurrent tasks (ENA rate limit)
 # The %10 limits concurrent running tasks to 10
-sbatch --array=1-${NUM_ACCESSIONS}%10 submit_ena_download.sh "$ACCESSIONS_FILE"
+# Set output and error logs to be in the same directory as accessions file
+sbatch --array=1-${NUM_ACCESSIONS}%10 \
+  --output="${LOGS_DIR}/ena_download_%A_%a.log" \
+  --error="${LOGS_DIR}/ena_download_%A_%a.err" \
+  "${SCRIPT_DIR}/submit_ena_download.sh" "$ACCESSIONS_FILE_ABS"
 
 echo ""
 echo "Job submitted! Monitor progress with:"

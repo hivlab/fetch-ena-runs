@@ -1,11 +1,22 @@
 #!/bin/bash
 
-# Create fastq directory if it doesn't exist
-FASTQ_DIR="fastq"
+# Check if accessions file is provided
+if [ -z "$1" ]; then
+  echo "Error: Please provide an accessions file"
+  echo "Usage: $0 <accessions_file>"
+  exit 1
+fi
+
+# Get the directory of the accessions file
+ACCESSIONS_FILE="$1"
+ACCESSIONS_DIR=$(dirname "$(realpath "$ACCESSIONS_FILE")")
+
+# Create fastq directory in the same location as accessions file
+FASTQ_DIR="${ACCESSIONS_DIR}/fastq"
 mkdir -p "$FASTQ_DIR"
 
-# Initialize samplesheet
-SAMPLESHEET="samplesheet.csv"
+# Initialize samplesheet in the same directory as accessions file
+SAMPLESHEET="${ACCESSIONS_DIR}/samplesheet.csv"
 
 # If running as SLURM array job, only process one line
 if [ -n "$SLURM_ARRAY_TASK_ID" ]; then
