@@ -11,6 +11,18 @@ fi
 ACCESSIONS_FILE="$1"
 ACCESSIONS_DIR=$(dirname "$(realpath "$ACCESSIONS_FILE")")
 
+# When invoked directly (not via submit_parallel.sh, which pre-expands),
+# expand any project/study IDs to run accessions before processing.
+if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    EXPAND_SCRIPT="${SCRIPT_DIR}/expand_accessions.sh"
+    if [ -x "$EXPAND_SCRIPT" ]; then
+        EXPANDED_FILE="${ACCESSIONS_DIR}/$(basename "$ACCESSIONS_FILE").runs"
+        "$EXPAND_SCRIPT" "$ACCESSIONS_FILE" "$EXPANDED_FILE"
+        ACCESSIONS_FILE="$EXPANDED_FILE"
+    fi
+fi
+
 # Create fastq directory in the same location as accessions file
 FASTQ_DIR="${ACCESSIONS_DIR}/fastq"
 mkdir -p "$FASTQ_DIR"
@@ -162,7 +174,7 @@ do
     fi
   ) 200>"${SAMPLESHEET}.lock"
 
-done < "$1"
+done < "$ACCESSIONS_FILE"
 
 echo ""
 echo "✓ Download complete! Samplesheet saved to: $SAMPLESHEET"

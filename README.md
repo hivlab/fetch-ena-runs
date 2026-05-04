@@ -4,7 +4,8 @@ A bash script to download FASTQ files from the European Nucleotide Archive (ENA)
 
 ## Features
 
-- Download FASTQ files from ENA using SRA/ENA sample accessions
+- Download FASTQ files from ENA using SRA/ENA run accessions
+- Accept BioProject (PRJEB/PRJNA/PRJDB) and Study (ERP/SRP/DRP) IDs — automatically expanded to all member runs via the ENA filereport API
 - Automatic MD5 checksum verification
 - Skip re-downloading files that already exist with correct checksums
 - Automatically redownload files with MD5 mismatches
@@ -74,18 +75,22 @@ sbatch --array=1-20 submit_ena_download.sh accessions.txt
 
 ### Input Format
 
-Create a text file with one SRA/ENA accession per line:
+Create a text file with one accession per line. You can mix run IDs and project/study IDs:
 
 ```
 SRR123456
-SRR123457
-SRR123458
+ERR123456
+PRJEB25514
+PRJNA553191
 ```
 
-The script accepts various accession formats:
-- SRA run accessions (e.g., `SRR123456`, `ERR123456`, `DRR123456`)
-- ENA run accessions (e.g., `ERR123456`)
-- Sample accessions (e.g., `SAMN123456`, `ERS123456`)
+Supported accession types:
+- **Run accessions** — `SRR*`, `ERR*`, `DRR*` (downloaded directly)
+- **BioProject IDs** — `PRJEB*`, `PRJNA*`, `PRJDB*` (expanded to all member runs)
+- **Study accessions** — `ERP*`, `SRP*`, `DRP*` (expanded to all member runs)
+
+Project/study expansion is performed via the ENA filereport API before downloading,
+so the SLURM array job sees a flat list of runs and parallelizes correctly.
 
 ## Example
 
@@ -152,6 +157,7 @@ The script will:
 ```
 /path/to/your/project/
 ├── accessions.txt          # Your input file
+├── accessions.txt.runs     # Expanded run list (created if input has PRJ*/ERP* IDs)
 ├── fastq/                  # Downloaded files
 │   ├── SRR12345678_1.fastq.gz
 │   ├── SRR12345678_2.fastq.gz

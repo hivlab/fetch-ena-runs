@@ -33,11 +33,26 @@ fi
 ACCESSIONS_FILE_ABS=$(realpath "$ACCESSIONS_FILE")
 ACCESSIONS_DIR=$(dirname "$ACCESSIONS_FILE_ABS")
 
+# Get the directory where this script is located (absolute path)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Expand any project/study IDs (PRJ*, ERP/SRP/DRP) to run accessions
+# so SLURM array chunking sees a flat run list.
+EXPAND_SCRIPT="${SCRIPT_DIR}/expand_accessions.sh"
+if [ ! -x "$EXPAND_SCRIPT" ]; then
+    echo "Error: Cannot find expand_accessions.sh at: $EXPAND_SCRIPT"
+    exit 1
+fi
+
+EXPANDED_FILE="${ACCESSIONS_DIR}/$(basename "$ACCESSIONS_FILE_ABS").runs"
+"$EXPAND_SCRIPT" "$ACCESSIONS_FILE_ABS" "$EXPANDED_FILE"
+ACCESSIONS_FILE_ABS="$EXPANDED_FILE"
+
 # Count number of accessions (non-empty lines)
-NUM_ACCESSIONS=$(grep -c -v '^[[:space:]]*$' "$ACCESSIONS_FILE")
+NUM_ACCESSIONS=$(grep -c -v '^[[:space:]]*$' "$ACCESSIONS_FILE_ABS")
 
 if [ "$NUM_ACCESSIONS" -eq 0 ]; then
-    echo "Error: No accessions found in '$ACCESSIONS_FILE'"
+    echo "Error: No accessions found after expansion (input: '$ACCESSIONS_FILE')"
     exit 1
 fi
 
@@ -59,9 +74,6 @@ echo "Splitting into $ARRAY_SIZE parallel jobs (~$ACCESSIONS_PER_JOB accessions 
 echo "Output directory: $ACCESSIONS_DIR"
 echo "Logs directory: $LOGS_DIR"
 echo ""
-
-# Get the directory where this script is located (absolute path)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Get absolute paths to the scripts
 SUBMIT_SCRIPT="${SCRIPT_DIR}/submit_ena_download.sh"
